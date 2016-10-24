@@ -398,7 +398,7 @@ public class CreateBoxes : MonoBehaviour
 		//Application.persistentDataPath   Application.dataPath   Assets/
 
 		try {
-			var filepaths = Directory.GetFiles ("/Users/jennybrown/codevis/", "*.txt", SearchOption.AllDirectories);
+			var filepaths = Directory.GetFiles ("/Users/jenny/dev/codevis/Assets/data/", "*.txt", SearchOption.AllDirectories);
 			// gridLayout (filepaths);
 			layOutPackagesInWorld (filepaths);
 
