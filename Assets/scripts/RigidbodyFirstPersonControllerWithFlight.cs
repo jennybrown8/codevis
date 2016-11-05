@@ -113,7 +113,7 @@ namespace codevis
         }
         public void initiateFlight()
         {
-            print("Initiating flight.");
+            //print("Initiating flight.");
             m_Flying = true;
             m_Jump = false;
             m_Jumping = false;
