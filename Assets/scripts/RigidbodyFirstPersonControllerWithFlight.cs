@@ -97,6 +97,7 @@ namespace codevis
             m_RigidBody = GetComponent<Rigidbody>();
             m_Capsule = GetComponent<CapsuleCollider>();
             mouseLook.Init (transform, cam.transform);
+            initiateFlight();
         }
 
 
@@ -110,7 +111,15 @@ namespace codevis
             }
 
         }
-
+        public void initiateFlight()
+        {
+            print("Initiating flight.");
+            m_Flying = true;
+            m_Jump = false;
+            m_Jumping = false;
+            m_RigidBody.velocity = new Vector3(m_RigidBody.velocity.x, 0f, m_RigidBody.velocity.z);
+            m_RigidBody.useGravity = false;
+        }
 
         private void FixedUpdate()
         {
@@ -119,16 +128,11 @@ namespace codevis
 
             if (m_Jumping && m_Jump)
             {
-                print("Jumped while jumping - Initiating flight");
-                m_Flying = true;
-                m_Jump = false;
-                m_Jumping = false;
-                m_RigidBody.velocity = new Vector3(m_RigidBody.velocity.x, 0f, m_RigidBody.velocity.z);
-                m_RigidBody.useGravity = false;
+                initiateFlight();
             }
             if ((Mathf.Abs(input.x) > float.Epsilon || Mathf.Abs(input.y) > float.Epsilon) && (advancedSettings.airControl || m_IsGrounded) && !m_Flying)
             {
-                print("Move set 1.");
+                //print("Walking.");
                 // always move along the camera forward as it is the direction that it being aimed at
                 Vector3 desiredMove = cam.transform.forward*input.y + cam.transform.right*input.x;
                 desiredMove = Vector3.ProjectOnPlane(desiredMove, m_GroundContactNormal).normalized;
@@ -166,7 +170,7 @@ namespace codevis
             }
             else if (!m_IsGrounded && !m_Flying)
             {
-                print("Is jumping or falling.");
+                //print("Is jumping or falling.");
                 m_RigidBody.drag = 0f;
                 if (m_PreviouslyGrounded && !m_Jumping)
                 {
@@ -175,19 +179,25 @@ namespace codevis
             }
             else if (m_Flying)
             {
+                m_RigidBody.drag = 1f;
+
                 // when user is holding down the up or down movement key, note the direction up or down.
-                // returns -1 or +1 depending which key is pressed, or zero otherwise.
-                var userDesiredVerticalDirection = Input.GetAxis("UpDown");
-
-                var buttonDown = Input.GetButton("UpDown");
-//                print("Is flying. Button down? " + buttonDown + " " + userDesiredVerticalDirection);
-
-                if (buttonDown == true) {
-                    // if user stops holding the vertical movement key, the character should immediately stop moving up or down.
-                    var yadjust = (userDesiredVerticalDirection * movementSettings.FlyVerticalSpeed * Time.deltaTime);
-                    print("Adjusting y by " + yadjust + " from original y of " + m_RigidBody.position.y);
-                    m_RigidBody.MovePosition(new Vector3(m_RigidBody.position.x, m_RigidBody.position.y + yadjust, m_RigidBody.position.z));
+                // The GetAxis call returns -1 or +1 depending which key is pressed.
+                // The GetButton call returns true while either button on that axis is held down.
+                // if user stops holding the vertical movement key, the character should immediately stop moving up or down.
+                var yadjust = 0f;
+                if (Input.GetButton("UpDown"))
+                {
+                    yadjust = (Input.GetAxis("UpDown") * movementSettings.FlyVerticalSpeed * Time.fixedDeltaTime);
                 }
+
+                // now check horizontal movements.
+                // always move along the camera forward as it is the direction that it being aimed at
+                Vector3 desiredMove = cam.transform.forward * input.y + cam.transform.right * input.x;
+                desiredMove = Vector3.ProjectOnPlane(desiredMove, m_GroundContactNormal).normalized;
+                desiredMove.x = desiredMove.x * movementSettings.FlyHorizontalSpeed * Time.fixedDeltaTime;
+                desiredMove.z = desiredMove.z * movementSettings.FlyHorizontalSpeed * Time.fixedDeltaTime;
+                m_RigidBody.MovePosition(new Vector3(m_RigidBody.position.x + desiredMove.x, m_RigidBody.position.y + yadjust, m_RigidBody.position.z + desiredMove.z));
 
             }
             m_Jump = false;
