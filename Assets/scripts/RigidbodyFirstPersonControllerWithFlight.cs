@@ -123,7 +123,7 @@ namespace codevis
 
         private void FixedUpdate()
         {
-            GroundCheck();
+            //GroundCheck(); // only needed when walking/jumping, not when eternally in flight.
             Vector2 input = GetInput();
 
             if (m_Jumping && m_Jump)
