@@ -15,15 +15,12 @@ namespace codevis
             public float ForwardSpeed = 8.0f;   // Speed when walking forward
             public float BackwardSpeed = 4.0f;  // Speed when walking backwards
             public float StrafeSpeed = 4.0f;    // Speed when walking sideways
-            public float RunMultiplier = 2.0f;   // Speed when sprinting
-	        public KeyCode RunKey = KeyCode.LeftShift;
+            public float FlyVerticalSpeed = 6.0f; // Speed to rise or fall when flying
+            public float FlyHorizontalSpeed = 6.0f; // Speed to move horizontally when flying
             public float JumpForce = 30f;
             public AnimationCurve SlopeCurveModifier = new AnimationCurve(new Keyframe(-90.0f, 1.0f), new Keyframe(0.0f, 1.0f), new Keyframe(90.0f, 0.0f));
             [HideInInspector] public float CurrentTargetSpeed = 8f;
 
-#if !MOBILE_INPUT
-            private bool m_Running;
-#endif
 
             public void UpdateDesiredTargetSpeed(Vector2 input)
             {
@@ -44,25 +41,9 @@ namespace codevis
 					//handled last as if strafing and moving forward at the same time forwards speed should take precedence
 					CurrentTargetSpeed = ForwardSpeed;
 				}
-#if !MOBILE_INPUT
-	            if (Input.GetKey(RunKey))
-	            {
-		            CurrentTargetSpeed *= RunMultiplier;
-		            m_Running = true;
-	            }
-	            else
-	            {
-		            m_Running = false;
-	            }
-#endif
+
             }
 
-#if !MOBILE_INPUT
-            public bool Running
-            {
-                get { return m_Running; }
-            }
-#endif
         }
 
 
@@ -88,7 +69,7 @@ namespace codevis
         private CapsuleCollider m_Capsule;
         private float m_YRotation;
         private Vector3 m_GroundContactNormal;
-        private bool m_Jump, m_PreviouslyGrounded, m_Jumping, m_IsGrounded;
+        private bool m_Jump, m_PreviouslyGrounded, m_Jumping, m_IsGrounded, m_Flying;
 
 
         public Vector3 Velocity
@@ -106,18 +87,10 @@ namespace codevis
             get { return m_Jumping; }
         }
 
-        public bool Running
+        public bool Flying
         {
-            get
-            {
- #if !MOBILE_INPUT
-				return movementSettings.Running;
-#else
-	            return false;
-#endif
-            }
+            get { return m_Flying; }
         }
-
 
         private void Start()
         {
@@ -131,10 +104,11 @@ namespace codevis
         {
             RotateView();
 
-            if (CrossPlatformInputManager.GetButtonDown("Jump") && !m_Jump)
+            if (CrossPlatformInputManager.GetButtonDown("Jump") && !m_Jump && !m_Flying)
             {
                 m_Jump = true;
             }
+
         }
 
 
@@ -143,8 +117,18 @@ namespace codevis
             GroundCheck();
             Vector2 input = GetInput();
 
-            if ((Mathf.Abs(input.x) > float.Epsilon || Mathf.Abs(input.y) > float.Epsilon) && (advancedSettings.airControl || m_IsGrounded))
+            if (m_Jumping && m_Jump)
             {
+                print("Jumped while jumping - Initiating flight");
+                m_Flying = true;
+                m_Jump = false;
+                m_Jumping = false;
+                m_RigidBody.velocity = new Vector3(m_RigidBody.velocity.x, 0f, m_RigidBody.velocity.z);
+                m_RigidBody.useGravity = false;
+            }
+            if ((Mathf.Abs(input.x) > float.Epsilon || Mathf.Abs(input.y) > float.Epsilon) && (advancedSettings.airControl || m_IsGrounded) && !m_Flying)
+            {
+                print("Move set 1.");
                 // always move along the camera forward as it is the direction that it being aimed at
                 Vector3 desiredMove = cam.transform.forward*input.y + cam.transform.right*input.x;
                 desiredMove = Vector3.ProjectOnPlane(desiredMove, m_GroundContactNormal).normalized;
@@ -152,15 +136,19 @@ namespace codevis
                 desiredMove.x = desiredMove.x*movementSettings.CurrentTargetSpeed;
                 desiredMove.z = desiredMove.z*movementSettings.CurrentTargetSpeed;
                 desiredMove.y = desiredMove.y*movementSettings.CurrentTargetSpeed;
+                desiredMove = desiredMove * SlopeMultiplier();
+
+
                 if (m_RigidBody.velocity.sqrMagnitude <
                     (movementSettings.CurrentTargetSpeed*movementSettings.CurrentTargetSpeed))
                 {
-                    m_RigidBody.AddForce(desiredMove*SlopeMultiplier(), ForceMode.Impulse);
+                    m_RigidBody.AddForce(desiredMove, ForceMode.Impulse);
                 }
             }
 
             if (m_IsGrounded)
             {
+                //print("Is Grounded.");
                 m_RigidBody.drag = 5f;
 
                 if (m_Jump)
@@ -176,15 +164,34 @@ namespace codevis
                     m_RigidBody.Sleep();
                 }
             }
-            else
+            else if (!m_IsGrounded && !m_Flying)
             {
+                print("Is jumping or falling.");
                 m_RigidBody.drag = 0f;
                 if (m_PreviouslyGrounded && !m_Jumping)
                 {
                     StickToGroundHelper();
                 }
             }
+            else if (m_Flying)
+            {
+                // when user is holding down the up or down movement key, note the direction up or down.
+                // returns -1 or +1 depending which key is pressed, or zero otherwise.
+                var userDesiredVerticalDirection = Input.GetAxis("UpDown");
+
+                var buttonDown = Input.GetButton("UpDown");
+//                print("Is flying. Button down? " + buttonDown + " " + userDesiredVerticalDirection);
+
+                if (buttonDown == true) {
+                    // if user stops holding the vertical movement key, the character should immediately stop moving up or down.
+                    var yadjust = (userDesiredVerticalDirection * movementSettings.FlyVerticalSpeed * Time.deltaTime);
+                    print("Adjusting y by " + yadjust + " from original y of " + m_RigidBody.position.y);
+                    m_RigidBody.MovePosition(new Vector3(m_RigidBody.position.x, m_RigidBody.position.y + yadjust, m_RigidBody.position.z));
+                }
+
+            }
             m_Jump = false;
+
         }
 
 
